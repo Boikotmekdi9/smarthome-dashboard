@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <meta name="theme-color" content="#0066cc">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Smart Home Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    /* Reset & Global */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    body {
+      background: #f7f9fc;
+      color: #333;
+      line-height: 1.6;
+    }
+    /* Login Screen */
+    #login-screen {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #e3f2fd;
+      padding: 20px;
+    }
+    .login-box {
+      background: white;
+      padding: 30px;
+      border-radius: 16px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+      width: 90%;
+      max-width: 400px;
+      text-align: center;
+    }
+    .login-box h2 {
+      margin-bottom: 20px;
+      color: #1976d2;
+    }
+    .login-box input {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    .login-box button {
+      background: #1976d2;
+      color: white;
+      border: none;
+      padding: 12px;
+      width: 100%;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .login-box button:hover {
+      background: #1565c0;
+    }
+    /* Dashboard */
+    #dashboard {
+      display: none;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    header h1 {
+      font-size: 28px;
+      color: #1976d2;
+    }
+    .refresh-btn {
+      background: #4caf50;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .refresh-btn:hover {
+      background: #388e3c;
+    }
+    .nav-tabs {
+      display: flex;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #ddd;
+    }
+    .nav-tab {
+      padding: 12px 24px;
+      background: #f0f4f8;
+      cursor: pointer;
+      font-weight: bold;
+      border-radius: 8px 8px 0 0;
+      margin-right: 5px;
+    }
+    .nav-tab.active {
+      background: white;
+      border-top: 3px solid #1976d2;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      text-align: center;
+      transition: transform 0.2s;
+    }
+    .card:hover {
+      transform: translateY(-5px);
+    }
+    .card h3 {
+      margin-bottom: 10px;
+      color: #1976d2;
+    }
+    .card p {
+      font-size: 1.4em;
+      font-weight: bold;
+      margin: 10px 0;
+    }
+    .status-open {
+      color: #e53935;
+    }
+    .status-closed {
+      color: #43a047;
+    }
+    .warn {
+      color: #fb8c00;
+      font-weight: bold;
+    }
+    .danger {
+      color: #e53935;
+      font-weight: bold;
+    }
+    .safe {
+      color: #43a047;
+    }
+    .chart-container {
+      position: relative;
+      height: 200px;
+      margin-top: 10px;
+    }
+    .history-list {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .history-item {
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+      font-size: 16px;
+    }
+    footer {
+      text-align: center;
+      margin-top: 30px;
+      color: #666;
+      font-size: 14px;
+    }
+    /* Tombol PIR */
+    .pir-btn {
+      padding: 10px 15px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .pir-btn.off {
+      background: #9e9e9e;
+      color: white;
+    }
+    .pir-btn {
+      background: #fb8c00;
+      color: white;
+    }
+    /* Responsive */
+    @media (max-width: 600px) {
+      header h1 {
+        font-size: 24px;
+      }
+      .card {
+        padding: 16px;
+      }
+      .card p {
+        font-size: 1.2em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- 🔐 LAYAR LOGIN -->
+  <div id="login-screen">
+    <div class="login-box">
+      <h2>🔐 Masuk Dashboard</h2>
+      <input type="text" id="username" placeholder="Username" />
+      <input type="password" id="password" placeholder="Password" />
+      <button onclick="login()">Masuk</button>
+      <p id="login-error" style="color: #e53935; margin-top: 10px; display: none;">Username/password salah!</p>
+    </div>
+  </div>
+
+  <!-- 🖥️ DASHBOARD UTAMA -->
+  <div id="dashboard">
+    <header>
+      <h1>🏠 Smart Home</h1>
+      <button class="refresh-btn" onclick="refreshData()">
+        🔁 Refresh
+      </button>
+    </header>
+
+    <!-- NAVIGASI TAB -->
+    <div class="nav-tabs">
+      <div id="tab-dashboard" class="nav-tab active" onclick="switchTab('dashboard')">🏠 Dashboard</div>
+      <div id="tab-history" class="nav-tab" onclick="switchTab('history')">📋 Riwayat</div>
+    </div>
+
+    <!-- DASHBOARD VIEW -->
+    <div id="view-dashboard">
+      <div class="grid">
+        <!-- PINTU -->
+        <div class="card">
+          <h3>🔒 Pintu</h3>
+          <p id="door-status">Menghubungkan...</p>
+        </div>
+        <!-- SUHU -->
+        <div class="card">
+          <h3>🌡️ Suhu</h3>
+          <p id="temp-value">--°C</p>
+          <div class="chart-container">
+            <canvas id="tempChart"></canvas>
+          </div>
+        </div>
+        <!-- KELEMBABAN -->
+        <div class="card">
+          <h3>💧 Kelembaban</h3>
+          <p id="humid-value">--%</p>
+          <div class="chart-container">
+            <canvas id="humidChart"></canvas>
+          </div>
+        </div>
+        <!-- GERAKAN -->
+        <div class="card">
+          <h3>🚶 Gerakan</h3>
+          <p id="motion-value">-</p>
+        </div>
+        <!-- GAS -->
+        <div class="card">
+          <h3>🔥 Gas</h3>
+          <p id="gas-value">-</p>
+        </div>
+        <!-- ALARM PIR -->
+        <div class="card">
+          <h3>🚨 Alarm PIR</h3>
+          <button id="pir-btn" class="pir-btn off" onclick="togglePIR()">🔴 Nonaktif</button>
+        </div>
+        <!-- UPDATE TIME -->
+        <div class="card" style="grid-column: 1 / -1; background: #f0f4f8;">
+          <h3>🔄 Terakhir Update</h3>
+          <p id="last-update">-</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIWAYAT VIEW -->
+    <div id="view-history" style="display: none;">
+      <h2>📋 Riwayat Aktivitas</h2>
+      <div class="history-list">
+        <h3>🚪 Pintu Terbuka</h3>
+        <div id="history-door"></div>
+      </div>
+      <div class="history-list" style="margin-top: 20px;">
+        <h3>📊 Data Suhu & Kelembaban</h3>
+        <div id="history-sensor"></div>
+      </div>
+      <div class="history-list" style="margin-top: 20px;">
+        <h3>🚶 Gerakan Terdeteksi</h3>
+        <div id="history-motion"></div>
+      </div>
+    </div>
+
+    <footer>
+      &copy; 2025 SmartHome IoT Project | Data dari ESP32 via MQTT
+    </footer>
+  </div>
+
+  <script>
+    // 🔐 Login
+    function login() {
+      const user = document.getElementById('username').value;
+      const pass = document.getElementById('password').value;
+      const error = document.getElementById('login-error');
+      if (user === 'admin' && pass === 'smarthome') {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+        loadHistory();
+      } else {
+        error.style.display = 'block';
+      }
+    }
+
+    // 📊 Inisialisasi Grafik
+    const tempCtx = document.getElementById('tempChart').getContext('2d');
+    const humidCtx = document.getElementById('humidChart').getContext('2d');
+    const tempChart = new Chart(tempCtx, {
+      type: 'line',
+      data: {
+        labels: Array(10).fill(''),
+        datasets: [{
+          label: 'Suhu (°C)',
+          data: Array(10).fill(null),
+          borderColor: '#1976d2',
+          backgroundColor: 'rgba(25, 118, 210, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { min: 15, max: 40 } }
+      }
+    });
+    const humidChart = new Chart(humidCtx, {
+      type: 'line',
+      data: {
+        labels: Array(10).fill(''),
+        datasets: [{
+          label: 'Kelembaban (%)',
+          data: Array(10).fill(null),
+          borderColor: '#43a047',
+          backgroundColor: 'rgba(67, 160, 71, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { min: 0, max: 100 } }
+      }
+    });
+
+    // Antrian data untuk grafik
+    let tempData = Array(10).fill(null);
+    let humidData = Array(10).fill(null);
+
+    // 📡 Koneksi MQTT
+    const options = {
+      username: 'Smarthomee',
+      password: 'Citraland11',
+      clientId: 'web-dash-' + Math.random().toString(16).substr(2, 8),
+      clean: true,
+      connectTimeout: 30000,
+    };
+    const client = mqtt.connect('wss://36ea91e54dbd4100910aa776ac298685.s1.eu.hivemq.cloud:8884/mqtt', options);
+
+    client.on('connect', () => {
+      console.log('✅ Terhubung ke HiveMQ');
+      client.subscribe('smarthome/door/status');
+      client.subscribe('smarthome/sensor/data');
+    });
+
+    client.on('message', (topic, message) => {
+      const payload = message.toString();
+      const now = new Date().toLocaleString('id-ID');
+      document.getElementById('last-update').textContent = now;
+
+      if (topic === 'smarthome/door/status') {
+        const status = payload === 'open' ? 'TERBUKA' : 'TERKUNCI';
+        const el = document.getElementById('door-status');
+        el.textContent = status;
+        el.className = payload === 'closed' ? 'status-closed' : 'status-open';
+
+        if (payload === 'open') {
+          const history = JSON.parse(localStorage.getItem('doorHistory') || '[]');
+          history.unshift(now);
+          if (history.length > 5) history.pop();
+          localStorage.setItem('doorHistory', JSON.stringify(history));
+          if (document.getElementById('view-history').style.display !== 'none') {
+            renderDoorHistory();
+          }
+        }
+      }
+
+      if (topic === 'smarthome/sensor/data') {
+        try {
+          const data = JSON.parse(payload);
+
+          // Update suhu
+          if (data.temperature !== undefined) {
+            document.getElementById('temp-value').textContent = data.temperature + '°C';
+            tempData.push(data.temperature);
+            tempData.shift();
+            tempChart.data.datasets[0].data = tempData;
+            tempChart.update();
+
+            const history = JSON.parse(localStorage.getItem('sensorHistory') || '[]');
+            history.unshift(`${now} | Suhu: ${data.temperature}°C, Humid: ${data.humidity}%`);
+            if (history.length > 5) history.pop();
+            localStorage.setItem('sensorHistory', JSON.stringify(history));
+          }
+
+          // Update kelembaban
+          if (data.humidity !== undefined) {
+            document.getElementById('humid-value').textContent = data.humidity + '%';
+            humidData.push(data.humidity);
+            humidData.shift();
+            humidChart.data.datasets[0].data = humidData;
+            humidChart.update();
+          }
+
+          // Gerakan
+          const motionText = data.motion == 1 ? 'TERDETEKSI' : 'AMAN';
+          const motionEl = document.getElementById('motion-value');
+          motionEl.textContent = motionText;
+          motionEl.className = data.motion == 1 ? 'warn' : 'safe';
+
+          if (data.motion == 1) {
+            const history = JSON.parse(localStorage.getItem('motionHistory') || '[]');
+            history.unshift(now);
+            if (history.length > 5) history.pop();
+            localStorage.setItem('motionHistory', JSON.stringify(history));
+            if (document.getElementById('view-history').style.display !== 'none') {
+              renderMotionHistory();
+            }
+          }
+
+          // Gas
+          if (data.gas_detected !== undefined) {
+            const gasEl = document.getElementById('gas-value');
+            if (data.gas_detected) {
+              gasEl.textContent = 'GAS BERBAHAYA TERDETEKSI!';
+              gasEl.className = 'danger';
+            } else {
+              gasEl.textContent = 'AMAN';
+              gasEl.className = 'safe';
+            }
+          }
+
+          // 🔛 Update tombol PIR
+          if (data.pir_enabled !== undefined) {
+            const btn = document.getElementById('pir-btn');
+            if (data.pir_enabled) {
+              btn.textContent = '🟢 Aktif';
+              btn.className = 'pir-btn';
+            } else {
+              btn.textContent = '🔴 Nonaktif';
+              btn.className = 'pir-btn off';
+            }
+          }
+        } catch (e) {
+          console.error('❌ Parse error:', e, payload);
+        }
+      }
+    });
+
+    client.on('error', (err) => {
+      console.error('❌ MQTT Error:', err);
+      document.getElementById('door-status').textContent = 'Gagal koneksi';
+    });
+
+    // 🔁 Refresh Data
+    function refreshData() {
+      location.reload();
+    }
+
+    // 🔄 Navigasi Tab
+    function switchTab(tab) {
+      if (tab === 'dashboard') {
+        document.getElementById('view-dashboard').style.display = 'block';
+        document.getElementById('view-history').style.display = 'none';
+        document.getElementById('tab-dashboard').classList.add('active');
+        document.getElementById('tab-history').classList.remove('active');
+      } else {
+        document.getElementById('view-dashboard').style.display = 'none';
+        document.getElementById('view-history').style.display = 'block';
+        document.getElementById('tab-dashboard').classList.remove('active');
+        document.getElementById('tab-history').classList.add('active');
+        renderAllHistory();
+      }
+    }
+
+    // 📅 Muat dan Tampilkan Riwayat
+    function loadHistory() {
+      renderDoorHistory();
+      renderSensorHistory();
+      renderMotionHistory();
+    }
+
+    function renderDoorHistory() {
+      const el = document.getElementById('history-door');
+      const history = JSON.parse(localStorage.getItem('doorHistory') || '[]');
+      if (history.length === 0) {
+        el.innerHTML = '<div class="history-item">Belum pernah terbuka</div>';
+      } else {
+        el.innerHTML = history.map(t => `<div class="history-item">🕒 ${t}</div>`).join('');
+      }
+    }
+
+    function renderSensorHistory() {
+      const el = document.getElementById('history-sensor');
+      const history = JSON.parse(localStorage.getItem('sensorHistory') || '[]');
+      if (history.length === 0) {
+        el.innerHTML = '<div class="history-item">Belum ada data</div>';
+      } else {
+        el.innerHTML = history.map(t => `<div class="history-item">📊 ${t}</div>`).join('');
+      }
+    }
+
+    function renderMotionHistory() {
+      const el = document.getElementById('history-motion');
+      const history = JSON.parse(localStorage.getItem('motionHistory') || '[]');
+      if (history.length === 0) {
+        el.innerHTML = '<div class="history-item">Tidak ada deteksi</div>';
+      } else {
+        el.innerHTML = history.map(t => `<div class="history-item">🚶 ${t}</div>`).join('');
+      }
+    }
+
+    function renderAllHistory() {
+      renderDoorHistory();
+      renderSensorHistory();
+      renderMotionHistory();
+    }
+
+    // 🔛 Toggle PIR
+    function togglePIR() {
+      const btn = document.getElementById('pir-btn');
+      const newState = btn.textContent.includes('Nonaktif') ? 'on' : 'off';
+      client.publish('smarthome/pir/control', newState);
+    }
+  </script>
+</body>
+</html>
