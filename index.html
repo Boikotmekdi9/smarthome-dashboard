@@ -416,10 +416,11 @@
     const client = mqtt.connect('wss://36ea91e54dbd4100910aa776ac298685.s1.eu.hivemq.cloud:8884/mqtt', options);
 
     client.on('connect', () => {
-      console.log('✅ Terhubung ke HiveMQ');
-      client.subscribe('smarthome/door/status');
-      client.subscribe('smarthome/sensor/data');
-      client.subscribe('smarthome/status'); // 🔥 Subscribe status ESP32
+  console.log('✅ Terhubung ke HiveMQ');
+  client.subscribe('smarthome/door/status');
+  client.subscribe('smarthome/sensor/data');
+  client.subscribe('smarthome/status');
+  client.subscribe('smarthome/buzzer/motion_control');  // 🔥 Subscribe status ESP32
     });
 
     client.on('message', (topic, message) => {
@@ -509,16 +510,16 @@
           }
 
           // Update tombol PIR
-          if (data.pir_enabled !== undefined) {
-            const btn = document.getElementById('pir-btn');
-            if (data.pir_enabled) {
-              btn.textContent = '🟢 Aktif';
-              btn.className = 'pir-btn';
-            } else {
-              btn.textContent = '🔴 Nonaktif';
-              btn.className = 'pir-btn off';
-            }
-          }
+          if (data.buzzer_motion_enabled !== undefined) {  // ✅ DIPERBAIKI
+    const btn = document.getElementById('pir-btn');
+    if (data.buzzer_motion_enabled) {
+        btn.textContent = '🟢 Aktif';
+        btn.className = 'pir-btn';
+    } else {
+        btn.textContent = '🔴 Nonaktif';
+        btn.className = 'pir-btn off';
+    }
+}
 
           // Perbarui waktu terakhir update dari ESP32
           lastESPUpdate = new Date();
@@ -600,10 +601,10 @@
 
     // 🔛 Toggle PIR
     function togglePIR() {
-      const btn = document.getElementById('pir-btn');
-      const newState = btn.textContent.includes('Nonaktif') ? 'on' : 'off';
-      client.publish('smarthome/pir/control', newState);
-    }
+  const btn = document.getElementById('pir-btn');
+  const newState = btn.textContent.includes('Nonaktif') ? 'on' : 'off';
+  client.publish('smarthome/buzzer/motion_control', newState);  // ✅ DIPERBAIKI
+}
 
     // 🔌 Update Indikator ESP32
     function updateESPStatus(status) {
